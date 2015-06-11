@@ -1,0 +1,30 @@
+
+example:
+
+./scotabc -b=ssd -c=4 -i /tmp/files_33.txt -s3-access-key=123456 -s3-endpoint=scontent-a.drom.ru -s3-secret-key=12341234 -max-proc 1
+
+full option list
+
+./scotabc 
+
+~
+~ СоЗФНЭСПГОРНСД 1.0
+~ СалионоваОлегаЗагружающийФайлыНаЭс3ПосредствомГоРутинНаСервераДрома 1.0
+~
+
+One of this parameters is empty:
+input file, access key, secret key, prefix, bucket name
+-b="ssd1": bucket name
+-c=20: concurency
+-error-log="error.log": save errors to this file
+-i="": input file
+-max-proc=1: max proc count
+-offset=0: count of lines to skip before start upload
+-p="/var/www/": removes this string from key on PUT
+-profile=false: save profiling to profile.prof on exit
+-s3-access-key="": s3 access key
+-s3-endpoint="scontent-a.drom.ru": s3 endpoint
+-s3-secret-key="": s3 secret key
+-silent=false: minimalizing logs
+-use-http=false: use http instead https
+

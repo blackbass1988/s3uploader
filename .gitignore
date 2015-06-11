@@ -1,0 +1,5 @@
+pkg
+.idea
+*.iml
+src/github.com/
+bin/
