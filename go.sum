@@ -1,0 +1,6 @@
+github.com/mitchellh/goamz v0.0.0-20150317174335-caaaea8b30ee h1:Wp4ixY2/QEZOrQrGMF1h1x4yxqsef+aQPse0XMXzZhs=
+github.com/mitchellh/goamz v0.0.0-20150317174335-caaaea8b30ee/go.mod h1:svb8iUupD5i7RyGXoCUrk3EQSaXjWxKuqiZ0j41Jmm8=
+github.com/motain/gocheck v0.0.0-20131023154940-9beb271d26e6 h1:gKdQPVb3yDSbcw4sgNyrt2LP0/4uTdrvTm3e4IcATCE=
+github.com/motain/gocheck v0.0.0-20131023154940-9beb271d26e6/go.mod h1:RnPn6D1AAyccwR5T+py4G3eMhZuqr0/pGM6Ygpu1tDc=
+github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec h1:DGmKwyZwEB8dI7tbLt/I/gQuP559o/0FrAkHKlQM/Ks=
+github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec/go.mod h1:owBmyHYMLkxyrugmfwE/DLJyW8Ro9mkphwuVErQ0iUw=

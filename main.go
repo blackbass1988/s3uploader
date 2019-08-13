@@ -40,7 +40,7 @@ var (
 	inputFile, removeThisStringFromKey, bucketName string
 	profile, silent, useHttp, createBucket         bool
 
-//	stats_putBytes uint64 = 0
+	//	stats_putBytes uint64 = 0
 )
 
 const (
