@@ -2,17 +2,14 @@ package main
 
 import (
 	"bufio"
-	"github.com/mitchellh/goamz/aws"
+	"github.com/blackbass1988/s3uploader/internal"
 	"github.com/mitchellh/goamz/s3"
 	"io"
-	//	"io/ioutil"
-	"errors"
+
 	"flag"
 	"fmt"
 	"log"
-	"mime"
 	"os"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -28,34 +25,38 @@ var (
 
 	offset         uint64 = 0 //how many lines need to skip before start uploading
 	maxRoutineSize int        //concurrency
-	MAX_PROC_COUNT int        //max proc mount
+	MaxProcCount   int        //max proc mount
 
 	messages chan *Message
 
-	activePool chan bool //active concurent uploads
+	activePool chan bool //active concurrent uploads
 
-	s3AccessKey, s3SecretKey, s3Endpoint string
-	errorLog                             string //filename of error log
+	destinationAccessKey, destinationSecretKey, destinationEndpoint string
+	sourceAccessKey, sourceSecretKey, sourceEndpoint                string
 
-	inputFile, removeThisStringFromKey, bucketName string
-	profile, silent, useHttp, createBucket         bool
+	destinationBucketName, sourceBucketName string
+
+	errorLog string //filename of error log
+
+	inputFile, removeThisStringFromKey                 string
+	profile, silent, useHttp, createBucket, sourceIsS3 bool
 
 	//	stats_putBytes uint64 = 0
 )
 
 const (
-	version string = "1.0.1"
+	version string = "2.0.0"
+)
+
+var (
+	destClient   *s3.S3
+	sourceClient *s3.S3
 )
 
 func main() {
 
 	var (
-		client                                               *s3.S3
-		err                                                  error
 		curRSize, curTotalSize, curSize, curTotalTransferred uint64
-		//	, curPutBytes uint64
-		errorLogFile            *os.File
-		bucketFound, appRunning bool = false, false
 	)
 
 	fmt.Println("")
@@ -70,15 +71,22 @@ func main() {
 	flag.StringVar(&errorLog, "error-log", "error.log", "save errors to this file")
 	flag.StringVar(&inputFile, "i", "", "input file")
 	flag.StringVar(&removeThisStringFromKey, "p", "", "removes this string from key on PUT")
-	flag.StringVar(&bucketName, "b", "ssd1", "bucket name")
-	flag.StringVar(&s3AccessKey, "s3-access-key", "", "s3 access key")
-	flag.StringVar(&s3SecretKey, "s3-secret-key", "", "s3 secret key")
-	flag.StringVar(&s3Endpoint, "s3-endpoint", "", "s3 endpoint")
+
+	flag.StringVar(&destinationBucketName, "destination-bucket", "", "destination bucket name")
+	flag.StringVar(&sourceBucketName, "source-bucket", "", "source bucket name. Use destination if empty")
+
+	flag.StringVar(&destinationAccessKey, "destination-access-key", "", "destination access key")
+	flag.StringVar(&destinationSecretKey, "destination-secret-key", "", "destination secret key")
+	flag.StringVar(&destinationEndpoint, "destination-endpoint", "", "destination endpoint")
+
+	flag.StringVar(&sourceAccessKey, "source-access-key", "", "source access key. Use destination if empty")
+	flag.StringVar(&sourceSecretKey, "source-secret-key", "", "source secret key. Use destination if empty")
+	flag.StringVar(&sourceEndpoint, "source-endpoint", "", "source endpoint. Use destination if empty")
 
 	flag.Uint64Var(&offset, "offset", uint64(0), "count of lines to skip before start upload")
 
-	flag.IntVar(&MAX_PROC_COUNT, "max-proc", 1, "max proc count")
-	flag.IntVar(&maxRoutineSize, "c", 20, "concurency")
+	flag.IntVar(&MaxProcCount, "max-proc", 1, "max proc count")
+	flag.IntVar(&maxRoutineSize, "c", 20, "concurrency")
 
 	flag.BoolVar(&silent, "silent", false, "minimalizing logs")
 	flag.BoolVar(&profile, "profile", false, "save profiling to profile.prof on exit")
@@ -90,54 +98,87 @@ func main() {
 	/// eo parse args
 
 	if profile {
-		f_cpu_profiling, err := os.Create("profile.prof")
+		fCpuProfiling, err := os.Create("profile.prof")
 		if err != nil {
 			panic(err)
 		}
-		pprof.StartCPUProfile(f_cpu_profiling)
+		pprof.StartCPUProfile(fCpuProfiling)
 		defer func() {
 			pprof.StopCPUProfile()
 		}()
 
 	}
-
-	if inputFile == "" || s3AccessKey == "" || s3SecretKey == "" || bucketName == "" {
+	if inputFile == "" || destinationAccessKey == "" || destinationSecretKey == "" || destinationBucketName == "" {
 		fmt.Println("One of this parameters is empty:\n input file, access key, secret key, prefix, bucket name")
 		flag.PrintDefaults()
-		os.Exit(0)
+		os.Exit(1)
 	}
 
-	runtime.GOMAXPROCS(MAX_PROC_COUNT)
+	if sourceEndpoint != "" {
+		sourceIsS3 = true
+		fmt.Println("sourceBucketName and sourceEndpoint is set. Will be use s3-s3 copy mode")
+	}
+
+	if sourceBucketName == "" {
+		sourceBucketName = destinationBucketName
+		fmt.Println("sourceBucketName not set. Use destinationBucketName")
+	}
+
+	if sourceAccessKey == "" {
+		sourceAccessKey = destinationAccessKey
+		fmt.Println("sourceAccessKey not set. Use destinationAccessKey")
+	}
+
+	if sourceSecretKey == "" {
+		sourceSecretKey = destinationSecretKey
+		fmt.Println("sourceSecretKey not set. Use destinationSecretKey")
+	}
+
+	runtime.GOMAXPROCS(MaxProcCount)
+
+	destClient = getDestinationS3Client()
+	sourceClient = getSourceS3Client()
+
+	checkAndCreateBucket(destClient, destinationBucketName, destinationEndpoint)
+	checkAndCreateBucket(sourceClient, sourceBucketName, sourceEndpoint)
 
 	messages = make(chan *Message, maxRoutineSize*2)
 	activePool = make(chan bool, maxRoutineSize)
 
-	client = getS3Client()
+	go saveToBucketFromFile(inputFile, removeThisStringFromKey, destinationBucketName)
 
-	bucketFound = findBucket(client)
+	work(curRSize, curTotalSize, curSize, curTotalTransferred)
+}
+
+func checkAndCreateBucket(s3Client *s3.S3, bucketName string, endpoint string) {
+
+	bucketFound := findBucket(s3Client, bucketName)
 
 	if !bucketFound && createBucket {
-		var bucket *s3.Bucket
 
-		bucket = client.Bucket(bucketName)
-		err = bucket.PutBucket(s3.PublicRead)
+		bucket := s3Client.Bucket(bucketName)
+		err := bucket.PutBucket(s3.PublicRead)
 		if err != nil {
 			panic(err)
 		}
-		bucketFound = findBucket(client)
+		bucketFound = findBucket(s3Client, bucketName)
 	}
 
 	if !bucketFound {
-		log.Fatalln(fmt.Printf("FATAL! Bucket \"%s\" not found for S3 endpoint \"%s\". Maybe you need to use -create-bucket=true option.", bucketName, s3Endpoint))
+		log.Fatalln(fmt.Printf("FATAL! Bucket \"%s\" not found for S3 endpoint \"%s\". Maybe you need to use -create-bucket=true option.", bucketName, endpoint))
 	}
+}
 
-	go saveToBucketFromFile(inputFile, removeThisStringFromKey, bucketName, client)
+func work(curRSize uint64, curTotalSize uint64, curSize uint64, curTotalTransferred uint64) {
 
-	errorLogFile, err = os.OpenFile(errorLog, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	appRunning := false
+
+	errorLogFile, err := os.OpenFile(errorLog, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	defer errorLogFile.Close()
 
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("ERROR while file open", err)
+		os.Exit(2)
 	}
 
 	m := &runtime.MemStats{}
@@ -150,7 +191,7 @@ func main() {
 		curTotalSize = atomic.LoadUint64(&fileTotal)
 		curSize = atomic.LoadUint64(&fileCount)
 		curTotalTransferred = atomic.LoadUint64(&totalTransferred)
-		//		curPutBytes = atomic.LoadUint64(&stats_putBytes)
+		//curPutBytes = atomic.LoadUint64(&stats_putBytes)
 
 		select {
 		case message = <-messages:
@@ -172,7 +213,6 @@ func main() {
 			}
 
 		case <-c:
-			//runtime.GC()
 			if profile {
 				runtime.ReadMemStats(m)
 				log.Printf("~ Goroutines count %d\n", runtime.NumGoroutine())
@@ -183,7 +223,7 @@ func main() {
 				log.Printf("~ Memory Mallocs %d\n", m.Mallocs)
 				log.Printf("~ Memory Frees %d\n", m.Frees)
 			}
-			//			atomic.SwapUint64(&stats_putBytes, uint64(0))
+			//atomic.SwapUint64(&stats_putBytes, uint64(0))
 
 			log.Printf("~ Processing %d/%d;\n", curSize, curTotalSize)
 
@@ -201,9 +241,6 @@ func main() {
 				os.Exit(0)
 			}
 
-			if profile {
-
-			}
 		case <-cProfile:
 			if profile {
 				var f_heap_profiling io.Writer
@@ -221,7 +258,7 @@ type Message struct {
 	Error      error
 }
 
-func saveToBucketFromFile(file string, root string, bucket string, client *s3.S3) {
+func saveToBucketFromFile(file string, prefixToTrim string, destBucket string) {
 	var err error
 	var reader *bufio.Reader
 	var buffer []byte
@@ -230,6 +267,10 @@ func saveToBucketFromFile(file string, root string, bucket string, client *s3.S3
 	var offsetDone bool
 
 	f, err = os.Open(file)
+
+	if err != nil {
+		log.Fatalln("error while open", file, err)
+	}
 
 	defer func() {
 		err = nil
@@ -274,10 +315,10 @@ func saveToBucketFromFile(file string, root string, bucket string, client *s3.S3
 
 		atomic.AddUint64(&currentRoutineSize, uint64(1))
 		fileSource = string(buffer)
-		key = strings.Replace(fileSource, root, "", -1)
+		key = strings.Replace(fileSource, prefixToTrim, "", -1)
 
 		activePool <- true
-		go uploadToS3(client, bucket, fileSource, key, activePool)
+		go uploadToS3(destBucket, fileSource, key, activePool)
 
 		fileSource = ""
 		key = ""
@@ -286,31 +327,34 @@ func saveToBucketFromFile(file string, root string, bucket string, client *s3.S3
 
 }
 
-func uploadToS3(client *s3.S3, bucket string, source string, key string, activePool chan bool) (err error) {
+func uploadToS3(destinationBucketName string, source string, key string, activePool chan bool) {
 
 	var (
-		_bucket   *s3.Bucket
-		startTime int64
-		data      []byte
-		filesize  uint64
+		destinationBucket *s3.Bucket
+		startTime         int64
+		filesize          uint64
+
+		fmeta    internal.FileMeta
+		mimeType string
+
+		err error
 	)
 
 	if !silent {
 		startTime = time.Now().Unix()
 	}
+
 	defer func() {
 		if !silent {
 			messages <- &Message{fmt.Sprintf("\"%s\" -> \"%s\" done. Time elapsed %d sec", source, key, time.Now().Unix()-startTime), "", nil}
 		}
 
-		//atomic.AddUint64(&stats_putBytes, filesize)
 		atomic.AddUint64(&totalTransferred, filesize)
 		atomic.AddUint64(&currentRoutineSize, ^uint64(0))
 		atomic.AddUint64(&fileCount, uint64(1))
 
 		err = nil
-		_bucket = nil
-		data = []byte{}
+		destinationBucket = nil
 
 		if r := recover(); r != nil {
 			fmt.Println("Recovered in uploadToS3", r)
@@ -318,106 +362,59 @@ func uploadToS3(client *s3.S3, bucket string, source string, key string, activeP
 		<-activePool
 	}()
 
-	var (
-		_f        *os.File
-		_fileInfo os.FileInfo
-		mimeType  string
-	)
+	destinationBucket = getDestinationS3Client().Bucket(destinationBucketName)
+	sourceBucket := getSourceS3Client().Bucket(sourceBucketName)
 
-	if _f, err = os.Open(source); err == nil {
+	if fmeta, err = internal.NewMeta(sourceIsS3, source, sourceBucket); err == nil {
 
-		defer _f.Close()
-		_reader := bufio.NewReader(_f)
+		defer fmeta.Reader.Close()
+		_reader := bufio.NewReader(fmeta.Reader)
 
-		_fileInfo, err = os.Stat(source)
-		if err != nil {
-			messages <- &Message{"", source, err}
-			return err
-		}
-		filesize = uint64(_fileInfo.Size())
-		_bucket = client.Bucket(bucket)
-		mimeType = getContentType(source)
-
-		if mimeType == "" {
-			messages <- &Message{"", source, errors.New("mime type not recognized")}
-		}
-		err = _bucket.PutReader(key, _reader, _fileInfo.Size(), mimeType, s3.PublicRead)
+		filesize = uint64(fmeta.Filesize)
+		mimeType = fmeta.Mimetype
+		err = destinationBucket.PutReader(key, _reader, fmeta.Filesize, mimeType, fmeta.Acl)
 
 		if err != nil {
 			messages <- &Message{"", source, err}
-			return err
+			return
 		}
 
 	} else {
 		messages <- &Message{"", source, err}
-
-		return err
 	}
-
-	return err
-
 }
 
-func getContentType(filename string) string {
-	return mime.TypeByExtension(filepath.Ext(filename))
+func getDestinationS3Client() (client *s3.S3) {
+	if destClient != nil {
+		return destClient
+	}
+
+	destClient = internal.GetS3Client(useHttp, destinationAccessKey, destinationSecretKey, destinationEndpoint)
+	return destClient
 }
 
-func getS3Client() (client *s3.S3) {
-	var auth aws.Auth
-	var region aws.Region
-	var schema string
-
-	auth = aws.Auth{
-		s3AccessKey,
-		s3SecretKey,
-		"",
+func getSourceS3Client() (client *s3.S3) {
+	if sourceClient != nil {
+		return sourceClient
 	}
-
-	if useHttp {
-		schema = "http"
-	} else {
-		schema = "https"
-	}
-
-	region = aws.Region{
-		"squid1", //canonical name
-		"",
-		schema + "://" + s3Endpoint, //address
-		"",
-		true,
-		true,
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-		"",
-	}
-
-	log.Printf("Connecting to %s...\n", region.S3Endpoint)
-
-	client = s3.New(auth, region)
-
-	return client
+	sourceClient = internal.GetS3Client(useHttp, sourceAccessKey, sourceSecretKey, sourceEndpoint)
+	return sourceClient
 }
 
-func findBucket(client *s3.S3) bool {
+func findBucket(client *s3.S3, bucketName string) bool {
 
 	var _b s3.Bucket
 
-	log.Println("reading list of buckets...")
+	log.Println("reading list of buckets of", client.Region.S3Endpoint)
 	resp, err := client.ListBuckets()
 	bucketFound := false
 
 	if err != nil {
-		log.Fatalln("FATAL! Error while reading list of buckets: ", err)
-		os.Exit(2)
+		log.Fatalln("FATAL! Error while reading list of buckets:", err)
 	}
 
 	if len(resp.Buckets) == 0 {
-		log.Fatalln("FATAL! No buckets found for S3 endpoint", s3Endpoint)
+		log.Fatalln("FATAL! No buckets found for S3 endpoint", destinationEndpoint)
 	}
 
 	for _, _b = range resp.Buckets {
