@@ -389,7 +389,7 @@ func getDestinationS3Client() (client *s3.S3) {
 		return destClient
 	}
 
-	destClient = internal.GetS3Client(useHttp, destinationAccessKey, destinationSecretKey, destinationEndpoint)
+	destClient = internal.GetS3Client(useHttp, destinationAccessKey, destinationSecretKey, destinationEndpoint, maxRoutineSize)
 	return destClient
 }
 
@@ -397,7 +397,7 @@ func getSourceS3Client() (client *s3.S3) {
 	if sourceClient != nil {
 		return sourceClient
 	}
-	sourceClient = internal.GetS3Client(useHttp, sourceAccessKey, sourceSecretKey, sourceEndpoint)
+	sourceClient = internal.GetS3Client(useHttp, sourceAccessKey, sourceSecretKey, sourceEndpoint, maxRoutineSize)
 	return sourceClient
 }
 
