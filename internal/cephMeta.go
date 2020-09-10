@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"github.com/mitchellh/goamz/s3"
 	"net/http"
 	"net/url"
@@ -40,7 +41,7 @@ func tryFromUrl(u *url.URL, sourceS3Bucket *s3.Bucket) (fmeta FileMeta, err erro
 
 	contentType := resp.Header.Get("content-type")
 	if contentType == "" {
-		err = MimeTypeNotRecognizedError
+		err = fmt.Errorf("%+v size: %d", MimeTypeNotRecognizedError, filesize)
 		return
 	}
 
