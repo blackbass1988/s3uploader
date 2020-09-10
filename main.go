@@ -38,8 +38,8 @@ var (
 
 	errorLog string //filename of error log
 
-	inputFile, removeThisStringFromKey                 string
-	profile, silent, useHttp, createBucket, sourceIsS3 bool
+	inputFile, removeThisStringFromKey                                              string
+	profile, silent, useHttp, createBucket, sourceIsS3, trimAfterQuestionSignOnSave bool
 
 	//	stats_putBytes uint64 = 0
 )
@@ -92,7 +92,7 @@ func main() {
 	flag.BoolVar(&profile, "profile", false, "save profiling to profile.prof on exit")
 	flag.BoolVar(&useHttp, "use-http", false, "use http instead https")
 	flag.BoolVar(&createBucket, "create-bucket", false, "create bucket if it not exists")
-
+	flag.BoolVar(&trimAfterQuestionSignOnSave, "trim-question-sign", false, "removes char \"?\" and after on save")
 	flag.Parse()
 
 	/// eo parse args

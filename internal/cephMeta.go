@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -16,10 +15,7 @@ var NotSuccessHttpStatusError = errors.New("url returned not 200")
 var NotImplementedAclMappingError = errors.New("mapping not implemented")
 
 func tryFromUrl(u *url.URL, sourceS3Bucket *s3.Bucket) (fmeta FileMeta, err error) {
-	key, err := prepareKey(u, sourceS3Bucket)
-	if err != nil {
-		return
-	}
+	key := u.String()
 
 	resp, err := sourceS3Bucket.GetResponse(key)
 
@@ -131,21 +127,6 @@ func getAcl(s3Bucket *s3.Bucket, key string, u *url.URL) (acl s3.ACL, err error)
 		}
 
 	}
-
-	return
-}
-
-func prepareKey(u *url.URL, bucket *s3.Bucket) (key string, err error) {
-	key = u.String()
-	bucketName := bucket.Name
-
-	indexOfBucketName := strings.Index(key, bucketName)
-
-	if indexOfBucketName == -1 {
-		return
-	}
-
-	key = key[indexOfBucketName+len(bucketName)+1:]
 
 	return
 }
