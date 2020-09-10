@@ -1,10 +1,10 @@
 package internal
 
 import (
+	"fmt"
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/mitchellh/goamz/s3"
-	"mime"
 	"os"
-	"path/filepath"
 )
 
 func tryFromFile(name string) (fmeta FileMeta, err error) {
@@ -25,7 +25,7 @@ func tryFromFile(name string) (fmeta FileMeta, err error) {
 
 	fmeta.Mimetype = getContentType(name)
 	if fmeta.Mimetype == "" {
-		err = MimeTypeNotRecognizedError
+		err = fmt.Errorf("%+v filesize: %d", MimeTypeNotRecognizedError, fmeta.Filesize)
 		return
 	}
 
@@ -33,5 +33,11 @@ func tryFromFile(name string) (fmeta FileMeta, err error) {
 }
 
 func getContentType(filename string) string {
-	return mime.TypeByExtension(filepath.Ext(filename))
+	mime, err := mimetype.DetectFile(filename)
+
+	if err != nil {
+		return ""
+	}
+
+	return mime.String()
 }

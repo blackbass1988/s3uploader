@@ -95,6 +95,7 @@ func main() {
 	flag.BoolVar(&trimAfterQuestionSignOnSave, "trim-question-sign", false, "removes char \"?\" and after on save")
 	flag.Parse()
 
+
 	/// eo parse args
 
 	if profile {
@@ -108,8 +109,27 @@ func main() {
 		}()
 
 	}
-	if inputFile == "" || destinationAccessKey == "" || destinationSecretKey == "" || destinationBucketName == "" {
-		fmt.Println("One of this parameters is empty:\n input file, access key, secret key, prefix, bucket name")
+
+	if inputFile == "" {
+		fmt.Println("input file is empty")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if destinationAccessKey == "" {
+		fmt.Println("destinationAccessKey is empty")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if destinationSecretKey == "" {
+		fmt.Println("destinationSecretKey is empty")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if destinationBucketName == "" {
+		fmt.Println("destinationBucketName is empty")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}

@@ -1,3 +1,5 @@
+github.com/gabriel-vasile/mimetype v1.1.1 h1:qbN9MPuRf3bstHu9zkI9jDWNfH//9+9kHxr9oRBBBOA=
+github.com/gabriel-vasile/mimetype v1.1.1/go.mod h1:6CDPel/o/3/s4+bp6kIbsWATq8pmgOisOPG40CJa6To=
 github.com/mitchellh/goamz v0.0.0-20150317174335-caaaea8b30ee h1:Wp4ixY2/QEZOrQrGMF1h1x4yxqsef+aQPse0XMXzZhs=
 github.com/mitchellh/goamz v0.0.0-20150317174335-caaaea8b30ee/go.mod h1:svb8iUupD5i7RyGXoCUrk3EQSaXjWxKuqiZ0j41Jmm8=
 github.com/motain/gocheck v0.0.0-20131023154940-9beb271d26e6 h1:gKdQPVb3yDSbcw4sgNyrt2LP0/4uTdrvTm3e4IcATCE=
