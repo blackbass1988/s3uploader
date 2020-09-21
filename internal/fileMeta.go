@@ -2,7 +2,6 @@ package internal
 
 import (
 	"fmt"
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/mitchellh/goamz/s3"
 	"os"
 )
@@ -23,21 +22,23 @@ func tryFromFile(name string) (fmeta FileMeta, err error) {
 	fmeta.Filesize = _fileInfo.Size()
 	fmeta.Acl = s3.PublicRead
 
-	fmeta.Mimetype = getContentType(name)
+	f, err := os.Open(name)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	fmeta.Mimetype, err = getContentType(f)
+
+	if err != nil {
+		err = fmt.Errorf("%+v filesize: %d, err: %+v", MimeTypeNotRecognizedError, fmeta.Filesize, err)
+		return
+	}
+
 	if fmeta.Mimetype == "" {
 		err = fmt.Errorf("%+v filesize: %d", MimeTypeNotRecognizedError, fmeta.Filesize)
 		return
 	}
 
 	return
-}
-
-func getContentType(filename string) string {
-	mime, err := mimetype.DetectFile(filename)
-
-	if err != nil {
-		return ""
-	}
-
-	return mime.String()
 }

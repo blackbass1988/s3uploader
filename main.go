@@ -95,7 +95,6 @@ func main() {
 	flag.BoolVar(&trimAfterQuestionSignOnSave, "trim-question-sign", false, "removes char \"?\" and after on save")
 	flag.Parse()
 
-
 	/// eo parse args
 
 	if profile {

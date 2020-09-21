@@ -1,10 +1,12 @@
 package internal
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"github.com/mitchellh/goamz/s3"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -28,14 +30,29 @@ func tryFromUrl(u *url.URL, sourceS3Bucket *s3.Bucket) (fmeta FileMeta, err erro
 		return
 	}
 
+	fmeta.Reader = resp.Body
+
 	filesize, err := strconv.ParseInt(resp.Header.Get("content-length"), 10, 0)
 
 	if filesize == 0 {
-		err = FileInvalidSizeError
+		err = fmt.Errorf("%+v; size: %d", FileInvalidSizeError, filesize)
 		return
 	}
 
 	contentType := resp.Header.Get("content-type")
+
+	if contentType == "text/plain" {
+		var buf, _ = ioutil.ReadAll(resp.Body)
+		contentType, err = getContentType(bytes.NewBuffer(buf))
+
+		if err != nil {
+			err = fmt.Errorf("%+v size: %d; err: %+v", MimeTypeNotRecognizedError, filesize, err)
+			return
+		}
+
+		fmeta.Reader = ioutil.NopCloser(bytes.NewReader(buf))
+	}
+
 	if contentType == "" {
 		err = fmt.Errorf("%+v size: %d", MimeTypeNotRecognizedError, filesize)
 		return
@@ -47,7 +64,6 @@ func tryFromUrl(u *url.URL, sourceS3Bucket *s3.Bucket) (fmeta FileMeta, err erro
 		return
 	}
 
-	fmeta.Reader = resp.Body
 	fmeta.Filesize = filesize
 	fmeta.Mimetype = contentType
 	fmeta.Acl = acl
