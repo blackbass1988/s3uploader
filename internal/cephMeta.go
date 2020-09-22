@@ -41,7 +41,7 @@ func tryFromUrl(u *url.URL, sourceS3Bucket *s3.Bucket) (fmeta FileMeta, err erro
 
 	contentType := resp.Header.Get("content-type")
 
-	if contentType == "text/plain" {
+	if contentType == "text/plain" || contentType == "" {
 		var buf, _ = ioutil.ReadAll(resp.Body)
 		contentType, err = getContentType(bytes.NewBuffer(buf))
 
