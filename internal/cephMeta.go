@@ -17,7 +17,7 @@ var NotSuccessHttpStatusError = errors.New("url returned not 200")
 var NotImplementedAclMappingError = errors.New("mapping not implemented")
 
 func tryFromUrl(u *url.URL, sourceS3Bucket *s3.Bucket) (fmeta FileMeta, err error) {
-	key := u.String()
+	key := u.Path
 
 	resp, err := sourceS3Bucket.GetResponse(key)
 
