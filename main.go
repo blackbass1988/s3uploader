@@ -158,8 +158,8 @@ func main() {
 	destClient = getDestinationS3Client()
 	sourceClient = getSourceS3Client()
 
-	checkAndCreateBucket(destClient, destinationBucketName, destinationEndpoint)
-	checkAndCreateBucket(sourceClient, sourceBucketName, sourceEndpoint)
+	checkAndCreateBucket(destClient, destinationBucketName)
+	checkAndCreateBucket(sourceClient, sourceBucketName)
 
 	messages = make(chan *Message, maxRoutineSize*2)
 	activePool = make(chan bool, maxRoutineSize)
@@ -169,22 +169,13 @@ func main() {
 	work(curRSize, curTotalSize, curSize, curTotalTransferred)
 }
 
-func checkAndCreateBucket(s3Client *s3.S3, bucketName string, endpoint string) {
-
-	bucketFound := findBucket(s3Client, bucketName)
-
-	if !bucketFound && createBucket {
-
+func checkAndCreateBucket(s3Client *s3.S3, bucketName string) {
+	if createBucket {
 		bucket := s3Client.Bucket(bucketName)
 		err := bucket.PutBucket(s3.PublicRead)
 		if err != nil {
 			panic(err)
 		}
-		bucketFound = findBucket(s3Client, bucketName)
-	}
-
-	if !bucketFound {
-		log.Fatalln(fmt.Printf("FATAL! Bucket \"%s\" not found for S3 endpoint \"%s\". Maybe you need to use -create-bucket=true option.", bucketName, endpoint))
 	}
 }
 
