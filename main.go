@@ -41,6 +41,8 @@ var (
 	inputFile, removeThisStringFromKey                                              string
 	profile, silent, useHttp, createBucket, sourceIsS3, trimAfterQuestionSignOnSave bool
 
+	sleepAfterUpload time.Duration
+
 	//	stats_putBytes uint64 = 0
 )
 
@@ -93,6 +95,9 @@ func main() {
 	flag.BoolVar(&useHttp, "use-http", false, "use http instead https")
 	flag.BoolVar(&createBucket, "create-bucket", false, "create bucket if it not exists")
 	flag.BoolVar(&trimAfterQuestionSignOnSave, "trim-question-sign", false, "removes char \"?\" and after on save")
+
+	flag.DurationVar(&sleepAfterUpload, "sleep", time.Nanosecond, "sleep after upload")
+
 	flag.Parse()
 
 	/// eo parse args
@@ -253,9 +258,9 @@ func work(curRSize uint64, curTotalSize uint64, curSize uint64, curTotalTransfer
 
 		case <-cProfile:
 			if profile {
-				var f_heap_profiling io.Writer
-				f_heap_profiling, err = os.Create("profile_heap.prof")
-				pprof.WriteHeapProfile(f_heap_profiling)
+				var fHeapProfiling io.Writer
+				fHeapProfiling, err = os.Create("profile_heap.prof")
+				pprof.WriteHeapProfile(fHeapProfiling)
 			}
 		}
 
@@ -389,9 +394,12 @@ func uploadToS3(destinationBucketName string, source string, key string, activeP
 			return
 		}
 
+		time.Sleep(sleepAfterUpload)
+
 	} else {
 		messages <- &Message{"", source, err}
 	}
+
 }
 
 func getDestinationS3Client() (client *s3.S3) {
